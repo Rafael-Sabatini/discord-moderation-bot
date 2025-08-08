@@ -9,32 +9,12 @@ require("dotenv").config();
 const token = process.env.TOKEN;
 const mongoUri = process.env.MONGODB_URI;
 
-if (!token || !mongoUri) {
-  console.error("Missing required environment variables!");
-  process.exit(1);
-}
+// if (!token || !mongoUri) {
+//   console.error("Missing required environment variables!");
+//   process.exit(1);
+// }
 
-// Create rate limiters
-const verificationLimiter = new Map();
 
-function checkRateLimit(userId) {
-  const now = Date.now();
-  const userAttempts = verificationLimiter.get(userId) || {
-    attempts: 0,
-    timestamp: now,
-  };
-
-  // Reset attempts if 15 minutes have passed
-  if (now - userAttempts.timestamp > 15 * 60 * 1000) {
-    userAttempts.attempts = 0;
-    userAttempts.timestamp = now;
-  }
-
-  userAttempts.attempts++;
-  verificationLimiter.set(userId, userAttempts);
-
-  return userAttempts.attempts <= 5;
-}
 
 const client = new Client({
   intents: [
@@ -107,22 +87,19 @@ const commandFolders = fs.readdirSync("./src/commands");
     if (!command) return;
 
     try {
-      // Check rate limit for verification command
-      if (command.data.name === "verify") {
-        if (!checkRateLimit(interaction.user.id)) {
-          return interaction.reply({
-            content:
-              "Too many verification attempts. Please try again in 15 minutes.",
-            ephemeral: true,
-          });
-        }
-      }
 
-      // Check if user has moderator permissions
-      if (!interaction.member.permissions.has("ModerateMembers")) {
+      // Allow only specific roles to use commands
+      const ALLOWED_ROLES = [
+        "1156184281471787068", // Owner
+        "1158116870600261712", // Admin
+        "1389665074444238960", // Head Moderator
+        "1156205959128031333", // Moderator
+      ];
+      const memberRoles = interaction.member.roles.cache.map((role) => role.id);
+      const hasPermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
+      if (!hasPermission) {
         return interaction.reply({
-          content:
-            "You need moderator permissions (Ban, Kick, and Timeout) to use this bot!",
+          content: "You don't have permission to use this command!",
           ephemeral: true,
         });
       }

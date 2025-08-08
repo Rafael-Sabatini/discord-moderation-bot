@@ -1,6 +1,13 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const { logAction } = require("../../utils/logging");
 
+const ALLOWED_ROLES = [
+  "1156184281471787068", // Owner
+  "1158116870600261712", // Admin
+  "1389665074444238960", // Head Moderator
+  "1156205959128031333", // Moderator
+];
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("unban")
@@ -23,9 +30,20 @@ module.exports = {
         .setRequired(false)
     ),
   async execute(interaction) {
-    if (!interaction.member.permissions.has("BanMembers")) {
+    // Ensure command visibility in every channel
+    await interaction.reply({
+      content: "Command executed successfully.",
+      ephemeral: false,
+    });
+
+    const memberRoles = interaction.member.roles.cache.map((role) => role.id);
+    const hasPermission = ALLOWED_ROLES.some((roleId) =>
+      memberRoles.includes(roleId)
+    );
+
+    if (!hasPermission) {
       return interaction.reply({
-        content: "You don't have permission to unban members!",
+        content: "You don't have permission to use this command!",
         ephemeral: true,
       });
     }
@@ -56,11 +74,16 @@ module.exports = {
       );
     } catch (error) {
       console.error(error);
-      await interaction.reply({
-        content:
-          "Failed to unban the user. Make sure the ID is correct and the user is banned.",
-        ephemeral: true,
-      });
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({
+          content: "Failed to unban the user. Make sure the ID is correct and the user is banned.",
+        });
+      } else {
+        await interaction.reply({
+          content: "Failed to unban the user. Make sure the ID is correct and the user is banned.",
+          ephemeral: true,
+        });
+      }
     }
   },
 };

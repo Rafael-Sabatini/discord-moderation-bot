@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const Warning = require("../../database/models/warning");
+const { logAction } = require("../../utils/logging");
 
 const ALLOWED_ROLES = [
   "1156184281471787068", // Owner
@@ -10,29 +10,19 @@ const ALLOWED_ROLES = [
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("unwarn")
-    .setDescription("Remove a warning from a user")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers
-    )
+    .setName("serverunmute")
+    .setDescription("Unmute a user in voice channels")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption((option) =>
       option
         .setName("user")
-        .setDescription("The user to remove warning from")
-        .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("warnid")
-        .setDescription("The ID of the warning to remove")
+        .setDescription("The user to unmute in voice channels")
         .setRequired(true)
     )
     .addStringOption((option) =>
       option
         .setName("reason")
-        .setDescription("Reason for removing the warning")
+        .setDescription("Reason for the unmute")
         .setRequired(false)
     ),
   async execute(interaction) {
@@ -47,36 +37,42 @@ module.exports = {
     }
 
     const user = interaction.options.getUser("user");
-    const warnId = interaction.options.getString("warnid");
-    const reason =
-      interaction.options.getString("reason") || "No reason provided";
+    const reason = interaction.options.getString("reason") || "No reason provided";
 
     try {
-      const warning = await Warning.findOneAndDelete({
-        _id: warnId,
-        userId: user.id,
-        guildId: interaction.guild.id,
-      });
+      const member = await interaction.guild.members.fetch(user.id);
 
-      if (!warning) {
+      // Check if the user is in a voice channel
+      if (!member.voice || !member.voice.channel) {
         return interaction.reply({
-          content: "Warning not found or already removed.",
+          content: `${user.tag} is not currently in a voice channel!`,
           ephemeral: true,
         });
       }
 
+      await member.voice.setMute(false, reason);
+
+      // Log the unmute action
+      await logAction(interaction.guild, "vcMutes", {
+        type: "vcUnmute",
+        user: user,
+        moderator: interaction.user,
+        reason: reason,
+        targetId: user.id,
+      });
+
       await interaction.reply(
-        `Successfully removed warning from ${user.tag}. Reason: ${reason}`
+        `Successfully unmuted ${user.tag} in voice channels for reason: ${reason}`
       );
     } catch (error) {
       console.error(error);
       if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
-          content: "Failed to remove the warning.",
+          content: "There was an error trying to unmute this user in voice channels!",
         });
       } else {
         await interaction.reply({
-          content: "Failed to remove the warning.",
+          content: "There was an error trying to unmute this user in voice channels!",
           ephemeral: true,
         });
       }

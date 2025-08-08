@@ -1,21 +1,43 @@
-module.exports = {
-  data: {
-    name: 'setAccountAge',
-    description: 'Set the required account age for users to access the server.',
-    options: [
-      {
-        type: 'INTEGER',
-        name: 'age',
-        description: 'The required account age in days',
-        required: true,
-      },
-    ],
-  },
-  async execute(interaction) {
-    const requiredAge = interaction.options.getInteger('age');
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 
-    // Here you would typically save the required age to your database or configuration
-    // For demonstration, we'll just reply with a confirmation message
-    await interaction.reply(`The required account age has been set to ${requiredAge} days.`);
+const ALLOWED_ROLES = [
+  "1156184281471787068", // Owner
+  "1158116870600261712", // Admin
+  "1389665074444238960", // Head Moderator
+];
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName("setaccountage")
+    .setDescription("Set the required account age for users to access the server")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addIntegerOption((option) =>
+      option
+        .setName("days")
+        .setDescription("The required account age in days")
+        .setRequired(true)
+        .setMinValue(1)
+        .setMaxValue(365)
+    ),
+  async execute(interaction) {
+    const requiredAge = interaction.options.getInteger("days");
+
+    const memberRoles = interaction.member.roles.cache.map((role) => role.id);
+    const hasPermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
+
+    if (!hasPermission) {
+      return interaction.reply({
+        content: "You don't have permission to use this command!",
+        ephemeral: true,
+      });
+    }
+
+    // Update the configuration
+    require("../../config").requiredAccountAge = requiredAge;
+
+    await interaction.reply({
+      content: `Successfully set the required account age to ${requiredAge} days.`,
+      ephemeral: true,
+    });
   },
 };
