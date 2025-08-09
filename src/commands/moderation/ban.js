@@ -24,14 +24,10 @@ module.exports = {
       option
         .setName("reason")
         .setDescription("Reason for the ban")
-        .setRequired(false)
+        .setRequired(true)
     ),
   async execute(interaction) {
-    // Ensure command visibility in every channel
-    await interaction.reply({
-      content: "Command executed successfully.",
-      ephemeral: false,
-    });
+
 
     const memberRoles = interaction.member.roles.cache.map((role) => role.id);
     const hasPermission = ALLOWED_ROLES.some((roleId) =>
@@ -68,6 +64,26 @@ module.exports = {
 
       await interaction.guild.members.ban(user, { reason });
 
+      // Delete all messages from the banned user in all text channels
+      const textChannels = interaction.guild.channels.cache.filter(
+        (ch) => ch.isTextBased && ch.isTextBased() && ch.viewable && ch.permissionsFor(interaction.guild.members.me).has('ManageMessages')
+      );
+      for (const channel of textChannels.values()) {
+        try {
+          // Fetch up to 100 messages at a time (Discord API limit)
+          let fetched;
+          do {
+            fetched = await channel.messages.fetch({ limit: 100 });
+            const userMessages = fetched.filter((msg) => msg.author.id === user.id);
+            if (userMessages.size > 0) {
+              await channel.bulkDelete(userMessages, true);
+            }
+          } while (fetched.size === 100);
+        } catch (err) {
+          // Ignore errors for channels where messages can't be fetched or deleted
+        }
+      }
+
       // Log the ban action
       await logAction(interaction.guild, "bans", {
         type: "ban",
@@ -77,18 +93,19 @@ module.exports = {
         targetId: user.id,
       });
 
-      await interaction.reply(
-        `Successfully banned ${user.tag} for reason: ${reason}`
-      );
+      await interaction.reply({
+        content: `Successfully banned ${user.tag} for reason: ${reason}\nAll their recent messages have been deleted from the server.`,
+        ephemeral: false,
+      });
     } catch (error) {
       console.error(error);
       if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
-          content: "There was an error trying to ban this user!",
+          content: `There was an error trying to ban this user! (${error.message})`,
         });
       } else {
         await interaction.reply({
-          content: "There was an error trying to ban this user!",
+          content: `There was an error trying to ban this user! (${error.message})`,
           ephemeral: true,
         });
       }

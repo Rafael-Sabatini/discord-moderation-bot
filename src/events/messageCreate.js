@@ -1,13 +1,11 @@
 const validateUrl = require("../utils/urlValidator");
 const Warning = require("../database/models/warning");
 const { logAction } = require("../utils/logging");
-
 module.exports = {
-  name: "messageCreate",
   async execute(client, message) {
     if (message.author.bot || !message.guild) return;
 
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urlRegex = /(https?:\/\/[\S]+)/g;
     const urls = message.content.match(urlRegex);
 
     if (!urls) return;
@@ -25,13 +23,14 @@ module.exports = {
             attachments: message.attachments,
             embeds: message.embeds,
             urls: urls,
+            action: "deleted",
           };
 
           // Delete message
           await message.delete();
 
-          // Log the deleted message
-          await logAction(message.guild, "MESSAGES", messageData);
+          // Log the deleted message (only as deleted)
+          await logAction(message.guild, "messages", messageData);
 
           // Create warning
           const warning = new Warning({
@@ -56,25 +55,6 @@ module.exports = {
         }
         break;
       }
-    }
-  },
-  name: "messageDelete",
-  async execute(client, message) {
-    if (message.author.bot || !message.guild) return;
-
-    try {
-      const messageData = {
-        author: message.author,
-        channel: message.channel.name,
-        content: message.content,
-        attachments: message.attachments,
-        embeds: message.embeds,
-      };
-
-      // Log the deleted message
-      await logAction(message.guild, "MESSAGES", messageData);
-    } catch (error) {
-      console.error("Error logging deleted message:", error);
     }
   },
 };

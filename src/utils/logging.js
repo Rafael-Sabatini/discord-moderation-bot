@@ -73,7 +73,7 @@ async function logAction(guild, type, data) {
 
       case "messages":
         embed
-          .setColor("#FF0000")
+          .setColor(data.action === "deleted" ? "#FF0000" : "#FFA500")
           .setTitle(
             data.action === "deleted"
               ? "🗑️ Message Deleted"
