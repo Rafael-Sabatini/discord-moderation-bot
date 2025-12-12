@@ -1,6 +1,8 @@
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const mongoose = require("mongoose");
 const fs = require("fs");
+const { spawn } = require("child_process");
+const path = require("path");
 require("dotenv").config();
 
 const token = process.env.TOKEN;
@@ -8,6 +10,49 @@ const mongoUri = process.env.MONGODB_URI;
 if (!token || !mongoUri) {
   console.error("Missing required environment variables!");
   process.exit(1);
+}
+
+// Start Express server in a child process
+function startExpressServer() {
+  console.log("🚀 Starting Express server...");
+  const server = spawn("node", [path.join(__dirname, "server.js")], {
+    stdio: "inherit",
+  });
+
+  server.on("error", (err) => {
+    console.error("❌ Failed to start Express server:", err);
+  });
+
+  server.on("exit", (code) => {
+    console.warn(`⚠️  Express server exited with code ${code}`);
+  });
+
+  return server;
+}
+
+// Deploy commands
+function deployCommands() {
+  console.log("📝 Deploying Discord commands...");
+  return new Promise((resolve, reject) => {
+    const deploy = spawn("node", [path.join(__dirname, "deploy-commands.js")], {
+      stdio: "inherit",
+    });
+
+    deploy.on("close", (code) => {
+      if (code === 0) {
+        console.log("✅ Commands deployed successfully");
+        resolve();
+      } else {
+        console.warn(`⚠️  Command deployment exited with code ${code}`);
+        resolve(); // Don't reject to allow bot to continue
+      }
+    });
+
+    deploy.on("error", (err) => {
+      console.error("❌ Failed to deploy commands:", err);
+      resolve(); // Don't reject to allow bot to continue
+    });
+  });
 }
 
 const client = new Client({
@@ -60,13 +105,20 @@ async function loadEvents() {
 
 async function startBot() {
   try {
+    // Deploy commands first
+    await deployCommands();
+
+    // Start Express server
+    startExpressServer();
+
+    // Connect to MongoDB and start Discord bot
     await mongoose.connect(mongoUri);
-    console.log("Connected to MongoDB");
+    console.log("✅ Connected to MongoDB");
     await loadCommands();
     await loadEvents();
     await client.login(token);
   } catch (error) {
-    console.error("Startup error:", error);
+    console.error("❌ Startup error:", error);
     process.exit(1);
   }
 }
