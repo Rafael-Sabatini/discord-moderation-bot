@@ -16,13 +16,13 @@ const ALLOWED_ROLES = [
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("warnings")
-    .setDescription("View warnings for a user")
+    .setDescription("View warnings for a user or all warnings in the server")
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption((option) =>
       option
         .setName("user")
-        .setDescription("The user to check warnings for")
-        .setRequired(true)
+        .setDescription("The user to check warnings for (leave empty to see all)")
+        .setRequired(false)
     ),
   async execute(interaction) {
     // Permission check: allow bot owner bypass
@@ -36,33 +36,72 @@ module.exports = {
       return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
     }
     const user = interaction.options.getUser("user");
-    if (!user) {
-      return interaction.reply({ content: "You must specify a user to check warnings for.", flags: 64 });
-    }
     await interaction.deferReply();
     try {
-      const warnings = await Warning.find({
-        userId: user.id,
-        guildId: interaction.guild.id,
-      }).sort({ timestamp: -1 });
+      let warnings;
+      let title;
+
+      if (user) {
+        // Get warnings for specific user
+        warnings = await Warning.find({
+          userId: user.id,
+          guildId: interaction.guild.id,
+        }).sort({ timestamp: -1 });
+        title = `Warnings for ${user.tag}`;
+      } else {
+        // Get all warnings for the guild
+        warnings = await Warning.find({
+          guildId: interaction.guild.id,
+        }).sort({ timestamp: -1 });
+        title = `All Warnings in ${interaction.guild.name}`;
+      }
+
       if (!warnings.length) {
-        await interaction.editReply({ content: `${user.tag} has no warnings.` });
+        const message = user ? `${user.tag} has no warnings.` : `No warnings found in this server.`;
+        await interaction.editReply({ content: message });
         return;
       }
+
+      // For all warnings, group by user and show a summary first
+      if (!user) {
+        const userWarningMap = {};
+        warnings.forEach((warn) => {
+          if (!userWarningMap[warn.userId]) {
+            userWarningMap[warn.userId] = [];
+          }
+          userWarningMap[warn.userId].push(warn);
+        });
+
+        const summaryEmbed = new EmbedBuilder()
+          .setTitle(title)
+          .setColor("#FF4444")
+          .setDescription(
+            Object.entries(userWarningMap)
+              .map(([userId, userWarnings]) => `<@${userId}>: **${userWarnings.length}** warning${userWarnings.length !== 1 ? "s" : ""}`)
+              .join("\n")
+          )
+          .setFooter({ text: `Total Warnings: ${warnings.length}` });
+
+        await interaction.editReply({ embeds: [summaryEmbed] });
+        return;
+      }
+
+      // For specific user, show detailed warnings
       const embed = new EmbedBuilder()
-        .setTitle(`Warnings for ${user.tag}`)
+        .setTitle(title)
         .setColor("#FF4444")
         .setDescription(
           warnings
             .map(
               (warn, index) =>
-                `**${index + 1}.** ${warn.reason}\n\ud83d\udcc5 <t:${Math.floor(
+                `**${index + 1}.** ${warn.reason}\n📅 <t:${Math.floor(
                   warn.timestamp / 1000
-                )}:R>\n\ud83d\udc6e <@${warn.moderatorId}>\n\ud83c\udd94 \`${warn._id}\`\n`
+                )}:R>\n👮 <@${warn.moderatorId}>\n🔔 \`${warn._id}\`\n`
             )
             .join("\n")
         )
         .setFooter({ text: `Total Warnings: ${warnings.length}` });
+
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       console.error("ViewWarnings command error:", error);
