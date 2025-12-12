@@ -21,8 +21,9 @@ mongoose
   .connect(mongoUri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    dbName: 'discord',
   })
-  .then(() => console.log("✅ Connected to MongoDB Atlas"))
+  .then(() => console.log("✅ Connected to MongoDB Atlas - discord database"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
     process.exit(1);

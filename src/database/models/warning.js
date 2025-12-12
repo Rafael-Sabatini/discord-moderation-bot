@@ -8,4 +8,4 @@ const warningSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model("Warning", warningSchema);
+module.exports = mongoose.model("Warning", warningSchema, "warnings");

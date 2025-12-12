@@ -6,4 +6,4 @@ const jailedUserSchema = new mongoose.Schema({
   jailedAt: { type: Date, default: Date.now },
 });
 
-module.exports = mongoose.model("JailedUser", jailedUserSchema);
+module.exports = mongoose.model("JailedUser", jailedUserSchema, "jailedusers");

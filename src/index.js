@@ -112,8 +112,10 @@ async function startBot() {
     startExpressServer();
 
     // Connect to MongoDB and start Discord bot
-    await mongoose.connect(mongoUri);
-    console.log("✅ Connected to MongoDB");
+    await mongoose.connect(mongoUri, {
+      dbName: 'discord'
+    });
+    console.log("✅ Connected to MongoDB - discord database");
     await loadCommands();
     await loadEvents();
     await client.login(token);
@@ -211,10 +213,17 @@ client.on("interactionCreate", async (interaction) => {
       await command.execute(interaction);
     } catch (error) {
       console.error(error);
-      await interaction.reply({
-        content: "There was an error executing this command!",
-        ephemeral: true,
-      });
+      // Only try to reply if the interaction hasn't been replied to yet
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "There was an error executing this command!",
+          ephemeral: true,
+        });
+      } else if (interaction.deferred) {
+        await interaction.editReply({
+          content: "There was an error executing this command!",
+        });
+      }
     }
   });
 
