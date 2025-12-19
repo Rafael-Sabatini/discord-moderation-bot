@@ -299,9 +299,9 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
   }
 
   const messages = await channel.messages.fetch({ limit: count || 100 });
-  const deletableMessages = messages.filter(msg => !msg.pinned);
+  const deletableMessages = Array.from(messages.values()).filter(msg => !msg.pinned);
 
-  if (deletableMessages.size === 0) {
+  if (deletableMessages.length === 0) {
     return {
       success: true,
       message: `No messages to purge in ${channel.name}`,
@@ -310,26 +310,32 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
   }
 
   let deletedCount = 0;
+  const batchSize = 100; // Discord max for bulk delete
 
   try {
-    for (const batch of deletableMessages.mapValues((msg, _) => msg).values()) {
-      const msgs = Array.isArray(batch) ? batch : [batch];
-      if (msgs.length > 0) {
-        await channel.bulkDelete(msgs, true);
-        deletedCount += msgs.length;
-      }
-    }
-  } catch (bulkDeleteError) {
-    console.error(`[PURGE] Failed to bulk delete:`, bulkDeleteError);
-    // Try individual deletion
-    for (const msg of deletableMessages.values()) {
+    // Process messages in batches of up to 100
+    for (let i = 0; i < deletableMessages.length; i += batchSize) {
+      const batch = deletableMessages.slice(i, i + batchSize);
+      
       try {
-        await msg.delete();
-        deletedCount++;
-      } catch (err) {
-        console.error(`[PURGE] Failed to delete individual message ${msg.id}:`, err);
+        await channel.bulkDelete(batch, true);
+        deletedCount += batch.length;
+      } catch (batchError) {
+        console.error(`[PURGE] Error deleting batch starting at index ${i}:`, batchError);
+        // If bulk delete fails for this batch, try individual deletion
+        for (const msg of batch) {
+          try {
+            await msg.delete();
+            deletedCount++;
+          } catch (err) {
+            console.error(`[PURGE] Failed to delete individual message ${msg.id}:`, err);
+          }
+        }
       }
     }
+  } catch (error) {
+    console.error(`[PURGE] Unexpected error during purge:`, error);
+    throw error;
   }
 
   await logAction(guild, "purges", {
