@@ -534,6 +534,133 @@ app.post("/api/moderation/unban", async (req, res) => {
   }
 });
 
+// Get warnings for a guild
+app.get("/api/moderation/warnings/:guildId", async (req, res) => {
+  try {
+    const warnings = await Warning.find({ guildId: req.params.guildId });
+    res.json(warnings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove a warning
+app.post("/api/moderation/unwarn", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "unwarn", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: "Warning removed",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API UNWARN] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Jail a user
+app.post("/api/moderation/jail", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "jail", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API JAIL] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unjail a user
+app.post("/api/moderation/unjail", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "unjail", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API UNJAIL] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Purge messages
+app.post("/api/moderation/purge", async (req, res) => {
+  try {
+    const { guildId, channelId, moderatorId, count, reason } = req.body;
+
+    if (!guildId || !channelId || !moderatorId || !count) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, channelId, moderatorId, count",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "purge", {
+      channelId: channelId,
+      moderatorId: moderatorId,
+      count: count,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API PURGE] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: "Endpoint not found" });
