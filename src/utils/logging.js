@@ -43,11 +43,35 @@ async function logAction(guild, type, data) {
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Warning ID:** ${data.warnId}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
+      case "unwarn":
+        embed
+          .setColor("#90EE90")
+          .setTitle("✅ Warning Removed")
+          .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Warning ID:** ${data.warnId}`)
+          .addFields({ name: "Moderator", value: data.moderator.tag });
+        break;
       case "bans":
         embed
           .setColor("#FF0000")
           .setTitle("🔨 Member Banned")
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
+          .addFields(
+            { name: "Moderator", value: data.moderator.tag },
+            { name: "Ban Type", value: data.duration || "Permanent" }
+          );
+        break;
+      case "jail":
+        embed
+          .setColor("#8B4513")
+          .setTitle("🔒 Member Jailed")
+          .setDescription(`**Member:** ${data.user.tag}`)
+          .addFields({ name: "Moderator", value: data.moderator.tag });
+        break;
+      case "unjail":
+        embed
+          .setColor("#90EE90")
+          .setTitle("🔓 Member Released from Jail")
+          .setDescription(`**Member:** ${data.user.tag}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
       case "kicks":

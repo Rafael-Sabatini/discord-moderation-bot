@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
+const { logAction } = require("../../utils/logging");
 
 
 const JAILED_ROLE_ID = "1245518227648413798";
@@ -60,6 +61,14 @@ module.exports = {
         { userId: user.id, guildId: interaction.guild.id, jailedAt: new Date() },
         { upsert: true }
       );
+      // Log the jail action
+      await logAction(interaction.guild, "bans", {
+        type: "jail",
+        user: user,
+        moderator: interaction.user,
+        reason: "User jailed",
+        targetId: user.id,
+      });
       await interaction.editReply({ content: `JAILED role has been applied to ${user.tag}, and all other roles have been removed.` });
     } catch (error) {
       console.error("Jail command error:", error);

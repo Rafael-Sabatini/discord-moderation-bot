@@ -3,6 +3,12 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
+// Production mode detection
+const NODE_ENV = process.env.NODE_ENV || "development";
+const isProduction = NODE_ENV === "production";
+
+console.log(`[EXPRESS] Starting in ${isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode`);
+
 const app = express();
 
 // Middleware
@@ -17,22 +23,36 @@ if (!mongoUri) {
   process.exit(1);
 }
 
-mongoose
-  .connect(mongoUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    dbName: 'discord',
-  })
-  .then(() => console.log("✅ Connected to MongoDB Atlas - discord database"))
-  .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
-    process.exit(1);
-  });
+// Only connect to MongoDB if not already connected
+if (mongoose.connection.readyState === 0) {
+  mongoose
+    .connect(mongoUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      dbName: 'discord',
+    })
+    .then(() => console.log("✅ Connected to MongoDB Atlas - discord database"))
+    .catch((err) => {
+      console.error("❌ MongoDB connection error:", err);
+      // Don't exit here since the main index.js will handle it
+    });
+}
 
 // Import Models
 const User = require("./database/models/user");
 const Warning = require("./database/models/warning");
 const JailedUser = require("./database/models/jailedUser");
+const Ban = require("./database/models/ban");
+const { executeModerationAction } = require("./utils/apiModeration");
+
+// Discord client reference
+let client = null;
+
+// Function to set the Discord client
+function setDiscordClient(discordClient) {
+  client = discordClient;
+  console.log("[EXPRESS] Discord client initialized for API");
+}
 
 // API Routes
 
@@ -251,6 +271,269 @@ app.delete("/api/jailed-users/:userId", async (req, res) => {
   }
 });
 
+// Moderation API Endpoints
+
+// Get all bans
+app.get("/api/moderation/bans", async (req, res) => {
+  try {
+    const bans = await Ban.find();
+    res.json(bans);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get active bans for a user in a guild
+app.get("/api/moderation/bans/:guildId/:userId", async (req, res) => {
+  try {
+    const ban = await Ban.findOne({
+      userId: req.params.userId,
+      guildId: req.params.guildId,
+      isActive: true,
+    });
+    if (!ban) {
+      return res.status(404).json({ error: "No active ban found" });
+    }
+    res.json(ban);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Ban a user
+app.post("/api/moderation/ban", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason, days } = req.body;
+
+    if (!guildId || !userId || !moderatorId || !reason) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId, reason",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "ban", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason,
+      days: days || null,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API BAN] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Kick a user
+app.post("/api/moderation/kick", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId || !reason) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId, reason",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "kick", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API KICK] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mute (timeout) a user
+app.post("/api/moderation/mute", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason, durationMs } = req.body;
+
+    if (!guildId || !userId || !moderatorId || !reason) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId, reason",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "mute", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason,
+      duration: durationMs || 60 * 60 * 1000, // Default 1 hour
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API MUTE] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unmute (remove timeout) a user
+app.post("/api/moderation/unmute", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "unmute", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API UNMUTE] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Server mute (voice mute) a user
+app.post("/api/moderation/servermute", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "servermute", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API SERVERMUTE] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Server unmute (voice unmute) a user
+app.post("/api/moderation/serverunmute", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "serverunmute", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API SERVERUNMUTE] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Warn a user
+app.post("/api/moderation/warn", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId || !reason) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId, reason",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "warn", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason,
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API WARN] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unban a user
+app.post("/api/moderation/unban", async (req, res) => {
+  try {
+    const { guildId, userId, moderatorId, reason } = req.body;
+
+    if (!guildId || !userId || !moderatorId) {
+      return res.status(400).json({
+        error: "Missing required fields: guildId, userId, moderatorId",
+      });
+    }
+
+    if (!client) {
+      return res.status(500).json({ error: "Discord client not initialized" });
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    const result = await executeModerationAction(guild, client, "unban", {
+      targetUserId: userId,
+      moderatorId: moderatorId,
+      reason: reason || "No reason provided",
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error("[API UNBAN] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: "Endpoint not found" });
@@ -264,20 +547,32 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Express server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-});
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("Shutting down server...");
-  await mongoose.connection.close();
-  process.exit(0);
-});
+// Only start if this file is run directly
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Express server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  });
 
-process.on("SIGTERM", async () => {
-  console.log("Shutting down server...");
-  await mongoose.connection.close();
-  process.exit(0);
-});
+  // Graceful shutdown
+  process.on("SIGINT", async () => {
+    console.log("Shutting down server...");
+    await mongoose.connection.close();
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", async () => {
+    console.log("Shutting down server...");
+    await mongoose.connection.close();
+    process.exit(0);
+  });
+} else {
+  // When required as a module, start the server immediately
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Express server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  });
+}
+
+module.exports = { app, setDiscordClient };

@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const { logAction } = require("../../utils/logging");
+const Ban = require("../../database/models/ban");
 
 
 const ALLOWED_ROLES = [
@@ -28,6 +29,14 @@ module.exports = {
         .setName("reason")
         .setDescription("Reason for the ban")
         .setRequired(true)
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName("days")
+        .setDescription("Number of days for temporary ban (leave empty for permanent)")
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(365)
     ),
   async execute(interaction) {
     // Permission check: allow bot owner bypass
@@ -45,6 +54,8 @@ module.exports = {
 
     const user = interaction.options.getUser("user");
     const reason = interaction.options.getString("reason") || "No reason provided";
+    const banDays = interaction.options.getInteger("days");
+    
     if (!user) {
       return interaction.reply({ content: "You must specify a user to ban.", flags: 64 });
     }
@@ -53,14 +64,41 @@ module.exports = {
     }
     await interaction.deferReply();
     try {
+      const isPermanent = !banDays;
+      let expiryDate = null;
+      let banMessage = `Successfully banned ${user.tag} for reason: ${reason}\nTheir messages from the last 7 days have been deleted.`;
+      
+      if (banDays) {
+        expiryDate = new Date(Date.now() + banDays * 24 * 60 * 60 * 1000);
+        banMessage += `\nThis is a temporary ban that will expire on ${expiryDate.toDateString()}.`;
+      } else {
+        banMessage += `\nThis is a permanent ban.`;
+      }
+
       // DM the user about the ban
       try {
-        await user.send(`You have been banned from ${interaction.guild.name} by ${interaction.user.tag} for: ${reason}`);
+        const dmMessage = `You have been banned from ${interaction.guild.name} by ${interaction.user.tag} for: ${reason}${isPermanent ? '' : `\nThis ban will expire on ${expiryDate.toDateString()}.`}`;
+        await user.send(dmMessage);
       } catch (dmError) {
-        // Ignore DM errors (user may have DMs off)
+        console.log(`[BAN] Could not DM user ${user.tag}: ${dmError.message}`);
       }
+
       // Delete up to 7 days of messages using Discord's built-in option
       await interaction.guild.members.ban(user, { reason, deleteMessageSeconds: 60 * 60 * 24 * 7 });
+      
+      // Record ban in database
+      const ban = new Ban({
+        userId: user.id,
+        guildId: interaction.guild.id,
+        moderatorId: interaction.user.id,
+        reason: reason,
+        banDate: new Date(),
+        expiryDate: expiryDate,
+        isPermanent: isPermanent,
+        isActive: true,
+      });
+      await ban.save();
+
       // Log the ban action immediately
       await logAction(interaction.guild, "bans", {
         type: "ban",
@@ -68,8 +106,10 @@ module.exports = {
         moderator: interaction.user,
         reason: reason,
         targetId: user.id,
+        duration: isPermanent ? "Permanent" : `${banDays} days`,
       });
-      await interaction.editReply({ content: `Successfully banned ${user.tag} for reason: ${reason}\nTheir messages from the last 7 days have been deleted.` });
+      
+      await interaction.editReply({ content: banMessage });
     } catch (error) {
       console.error("Ban command error:", error);
       if (interaction.replied || interaction.deferred) {

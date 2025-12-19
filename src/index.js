@@ -1,9 +1,14 @@
 const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const mongoose = require("mongoose");
 const fs = require("fs");
-const { spawn } = require("child_process");
 const path = require("path");
 require("dotenv").config();
+
+// Production mode detection
+const NODE_ENV = process.env.NODE_ENV || "development";
+const isProduction = NODE_ENV === "production";
+
+console.log(`[BOT] Starting in ${isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode`);
 
 const token = process.env.TOKEN;
 const mongoUri = process.env.MONGODB_URI;
@@ -12,28 +17,16 @@ if (!token || !mongoUri) {
   process.exit(1);
 }
 
-// Start Express server in a child process
-function startExpressServer() {
-  console.log("🚀 Starting Express server...");
-  const server = spawn("node", [path.join(__dirname, "server.js")], {
-    stdio: "inherit",
-  });
-
-  server.on("error", (err) => {
-    console.error("❌ Failed to start Express server:", err);
-  });
-
-  server.on("exit", (code) => {
-    console.warn(`⚠️  Express server exited with code ${code}`);
-  });
-
-  return server;
-}
+// Import server setup and utilities
+const { setDiscordClient: setServerDiscordClient } = require("./server");
+const { setDiscordClient: setGlobalsDiscordClient } = require("./config/globals");
+const { startBanExpiryCheck } = require("./utils/banExpiry");
 
 // Deploy commands
 function deployCommands() {
   console.log("📝 Deploying Discord commands...");
   return new Promise((resolve, reject) => {
+    const { spawn } = require("child_process");
     const deploy = spawn("node", [path.join(__dirname, "deploy-commands.js")], {
       stdio: "inherit",
     });
@@ -108,14 +101,12 @@ async function startBot() {
     // Deploy commands first
     await deployCommands();
 
-    // Start Express server
-    startExpressServer();
-
     // Connect to MongoDB and start Discord bot
     await mongoose.connect(mongoUri, {
       dbName: 'discord'
     });
     console.log("✅ Connected to MongoDB - discord database");
+    
     await loadCommands();
     await loadEvents();
     await client.login(token);
@@ -128,6 +119,12 @@ async function startBot() {
 // Add ready event listener
 client.on("ready", () => {
   console.log(`✅ ${client.user.tag} is online!`);
+  // Pass the client to both the server and globals so it can use it for API operations
+  setServerDiscordClient(client);
+  setGlobalsDiscordClient(client);
+  console.log("🚀 Express API server is ready to handle requests");
+  // Start the background ban expiry checker
+  startBanExpiryCheck();
 });
 
 // Start the bot

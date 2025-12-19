@@ -3,12 +3,16 @@ services:
     name: discord-moderation-bot-api
     env: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm install --production
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
         sync: false
+      - key: TOKEN
+        sync: false
       - key: PORT
         value: 10000
+      - key: OWNER_ID
+        sync: false

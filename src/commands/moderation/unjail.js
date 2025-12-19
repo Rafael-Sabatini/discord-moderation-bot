@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const JailedUser = require("../../database/models/jailedUser");
+const { logAction } = require("../../utils/logging");
 
 
 const JAILED_ROLE_ID = "1245518227648413798";
@@ -50,6 +51,14 @@ module.exports = {
       await member.roles.remove(JAILED_ROLE_ID);
       // Remove from DB
       await JailedUser.deleteOne({ userId: user.id, guildId: interaction.guild.id });
+      // Log the unjail action
+      await logAction(interaction.guild, "bans", {
+        type: "unjail",
+        user: user,
+        moderator: interaction.user,
+        reason: "User unjailed",
+        targetId: user.id,
+      });
       // Restore previous roles if stored (not implemented yet)
       // You can implement role backup/restore logic here
       await interaction.editReply({ content: `JAILED role has been removed from ${user.tag}.` });

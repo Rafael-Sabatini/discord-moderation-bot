@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const Warning = require("../../database/models/warning");
+const { logAction } = require("../../utils/logging");
 
 
 const ALLOWED_ROLES = [
@@ -68,6 +69,15 @@ module.exports = {
         await interaction.editReply({ content: "Warning not found or already removed." });
         return;
       }
+      // Log the unwarn action
+      await logAction(interaction.guild, "warnings", {
+        type: "unwarn",
+        user: user,
+        moderator: interaction.user,
+        reason: reason,
+        targetId: user.id,
+        warnId: warnId,
+      });
       await interaction.editReply({ content: `Successfully removed warning from ${user.tag}. Reason: ${reason}` });
     } catch (error) {
       console.error("Unwarn command error:", error);
