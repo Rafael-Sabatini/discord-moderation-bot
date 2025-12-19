@@ -4,9 +4,15 @@ const { logAction } = require("./logging");
  * Shared utility function to execute moderation actions
  */
 async function executeModerationAction(guild, client, action, params) {
-  const { targetUserId, moderatorId, reason, days, duration } = params;
+  const { targetUserId, moderatorId, reason, days, duration, channelId, count } = params;
 
   try {
+    // Purge doesn't need user fetching
+    if (action === "purge") {
+      const moderator = await client.users.fetch(moderatorId);
+      return await handlePurge(guild, client, moderator, reason, channelId, count);
+    }
+
     const targetUser = await client.users.fetch(targetUserId);
     const moderator = await client.users.fetch(moderatorId);
     const member = await guild.members.fetch(targetUserId);
@@ -277,6 +283,67 @@ async function handleUnban(guild, client, targetUserId, moderator, reason) {
   return {
     success: true,
     message: `Unbanned ${bannedUser.tag}`,
+  };
+}
+
+async function handlePurge(guild, client, moderator, reason, channelId, count) {
+  const channel = await guild.channels.fetch(channelId);
+
+  if (!channel || !channel.isTextBased()) {
+    throw new Error("Channel not found or is not a text channel");
+  }
+
+  const me = guild.members.me;
+  if (!me.permissions.has("ManageMessages")) {
+    throw new Error("Bot does not have Manage Messages permission");
+  }
+
+  const messages = await channel.messages.fetch({ limit: count || 100 });
+  const deletableMessages = messages.filter(msg => !msg.pinned);
+
+  if (deletableMessages.size === 0) {
+    return {
+      success: true,
+      message: `No messages to purge in ${channel.name}`,
+      deletedCount: 0,
+    };
+  }
+
+  let deletedCount = 0;
+
+  try {
+    for (const batch of deletableMessages.mapValues((msg, _) => msg).values()) {
+      const msgs = Array.isArray(batch) ? batch : [batch];
+      if (msgs.length > 0) {
+        await channel.bulkDelete(msgs, true);
+        deletedCount += msgs.length;
+      }
+    }
+  } catch (bulkDeleteError) {
+    console.error(`[PURGE] Failed to bulk delete:`, bulkDeleteError);
+    // Try individual deletion
+    for (const msg of deletableMessages.values()) {
+      try {
+        await msg.delete();
+        deletedCount++;
+      } catch (err) {
+        console.error(`[PURGE] Failed to delete individual message ${msg.id}:`, err);
+      }
+    }
+  }
+
+  await logAction(guild, "purges", {
+    type: "purge",
+    moderator: moderator,
+    reason: reason,
+    channel: channel,
+    deletedCount: deletedCount,
+  });
+
+  return {
+    success: true,
+    message: `Purged ${deletedCount} messages from ${channel.name}`,
+    deletedCount: deletedCount,
   };
 }
 
