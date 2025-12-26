@@ -32,12 +32,6 @@ module.exports = {
         .setName("warnid")
         .setDescription("The ID of the warning to remove")
         .setRequired(true)
-    )
-    .addStringOption((option) =>
-      option
-        .setName("reason")
-        .setDescription("Reason for removing the warning")
-        .setRequired(false)
     ),
   async execute(interaction) {
     // Permission check: allow bot owner bypass
@@ -57,7 +51,6 @@ module.exports = {
     if (!warnId) {
       return interaction.reply({ content: "You must specify a warning ID to remove.", flags: 64 });
     }
-    const reason = interaction.options.getString("reason") || "No reason provided";
     await interaction.deferReply();
     try {
       const warning = await Warning.findOneAndDelete({
@@ -74,11 +67,10 @@ module.exports = {
         type: "unwarn",
         user: user,
         moderator: interaction.user,
-        reason: reason,
         targetId: user.id,
         warnId: warnId,
       });
-      await interaction.editReply({ content: `Successfully removed warning from ${user.tag}. Reason: ${reason}` });
+      await interaction.editReply({ content: `Successfully removed warning from ${user.tag}.` });
     } catch (error) {
       console.error("Unwarn command error:", error);
       if (interaction.replied || interaction.deferred) {

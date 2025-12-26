@@ -211,15 +211,21 @@ client.on("interactionCreate", async (interaction) => {
     } catch (error) {
       console.error(error);
       // Only try to reply if the interaction hasn't been replied to yet
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: "There was an error executing this command!",
-          ephemeral: true,
-        });
-      } else if (interaction.deferred) {
-        await interaction.editReply({
-          content: "There was an error executing this command!",
-        });
+      // Wrap in try-catch to prevent "already acknowledged" errors
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "There was an error executing this command!",
+            ephemeral: true,
+          });
+        } else if (interaction.deferred) {
+          await interaction.editReply({
+            content: "There was an error executing this command!",
+          });
+        }
+      } catch (replyError) {
+        // If we fail to reply, just log it - the command may have already handled it
+        console.error("Failed to send error reply:", replyError.message);
       }
     }
   });

@@ -8,7 +8,8 @@ const LOG_CHANNEL_IDS = {
   vcMutes: "1403026443612586062",
   serverMutes: "1403026443612586062",
   warnings: "1403026483974373498",
-  messages: "1403026519118581863" // Updated for deleted/edited messages
+  messages: "1403026519118581863", // Updated for deleted/edited messages
+  purged: "1451999307531157757", // Purged/bulk deleted messages
 };
 
 async function logAction(guild, type, data) {
@@ -37,18 +38,19 @@ async function logAction(guild, type, data) {
 
     switch (type) {
       case "warnings":
-        embed
-          .setColor("#FFA500")
-          .setTitle("⚠️ Member Warned")
-          .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Warning ID:** ${data.warnId}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
-        break;
-      case "unwarn":
-        embed
-          .setColor("#90EE90")
-          .setTitle("✅ Warning Removed")
-          .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Warning ID:** ${data.warnId}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
+        if (data.type === "unwarn") {
+          embed
+            .setColor("#90EE90")
+            .setTitle("✅ Warning Removed")
+            .setDescription(`**Member:** ${data.user.tag}\n**Warning ID:** ${data.warnId}`)
+            .addFields({ name: "Moderator", value: data.moderator.tag });
+        } else {
+          embed
+            .setColor("#FFA500")
+            .setTitle("⚠️ Member Warned")
+            .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Warning ID:** ${data.warnId}`)
+            .addFields({ name: "Moderator", value: data.moderator.tag });
+        }
         break;
       case "bans":
         embed
@@ -59,6 +61,13 @@ async function logAction(guild, type, data) {
             { name: "Moderator", value: data.moderator.tag },
             { name: "Ban Type", value: data.duration || "Permanent" }
           );
+        break;
+      case "unbans":
+        embed
+          .setColor("#00AA00")
+          .setTitle("✅ Member Unbanned")
+          .setDescription(`**Member:** ${data.user.tag}`)
+          .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
       case "jail":
         embed
@@ -84,14 +93,14 @@ async function logAction(guild, type, data) {
       case "timeouts":
         embed
           .setColor("#FF6B6B")
-          .setTitle("⏳ Member Timed Out")
+          .setTitle("⏳ Member Muted (Timed Out)")
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Duration:** ${data.duration}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
       case "timeout removal":
         embed
           .setColor("#6BFF6B")
-          .setTitle("⏳ Timeout Removed")
+          .setTitle("🔊 Member Unmuted (Timeout Removed)")
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
@@ -165,6 +174,13 @@ async function logAction(guild, type, data) {
             });
           }
         }
+        break;
+      case "purged":
+        embed
+          .setColor("#8B0000")
+          .setTitle("🗑️ Messages Purged")
+          .setDescription(`**Channel:** ${data.channel.name}\n**Messages Deleted:** ${data.deletedCount}\n**Reason:** ${data.reason || "No reason provided"}`)
+          .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
     }
     await logChannel.send({ embeds: [embed] });

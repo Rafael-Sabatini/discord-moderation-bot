@@ -547,11 +547,11 @@ app.get("/api/moderation/warnings/:guildId", async (req, res) => {
 // Remove a warning
 app.post("/api/moderation/unwarn", async (req, res) => {
   try {
-    const { guildId, userId, moderatorId } = req.body;
+    const { guildId, userId, moderatorId, warnId } = req.body;
 
-    if (!guildId || !userId || !moderatorId) {
+    if (!guildId || !userId || !moderatorId || !warnId) {
       return res.status(400).json({
-        error: "Missing required fields: guildId, userId, moderatorId",
+        error: "Missing required fields: guildId, userId, moderatorId, warnId",
       });
     }
 
@@ -563,7 +563,7 @@ app.post("/api/moderation/unwarn", async (req, res) => {
     const result = await executeModerationAction(guild, client, "unwarn", {
       targetUserId: userId,
       moderatorId: moderatorId,
-      reason: "Warning removed",
+      warnId: warnId,
     });
 
     res.status(201).json(result);

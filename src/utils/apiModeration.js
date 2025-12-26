@@ -32,6 +32,8 @@ async function executeModerationAction(guild, client, action, params) {
         return await handleServerUnmute(guild, client, member, targetUser, moderator, reason);
       case "warn":
         return await handleWarn(guild, client, targetUser, moderator, reason);
+      case "unwarn":
+        return await handleUnwarn(guild, client, params);
       case "unban":
         return await handleUnban(guild, client, targetUserId, moderator, reason);
       default:
@@ -272,11 +274,10 @@ async function handleUnban(guild, client, targetUserId, moderator, reason) {
 
   await guild.members.unban(targetUserId, reason);
 
-  await logAction(guild, "bans", {
+  await logAction(guild, "unbans", {
     type: "unban",
     user: bannedUser,
     moderator: moderator,
-    reason: reason,
     targetId: targetUserId,
   });
 
@@ -284,6 +285,42 @@ async function handleUnban(guild, client, targetUserId, moderator, reason) {
     success: true,
     message: `Unbanned ${bannedUser.tag}`,
   };
+}
+
+async function handleUnwarn(guild, client, params) {
+  const { warnId, targetUserId, moderatorId } = params;
+  const Warning = require("../database/models/warning");
+
+  try {
+    const warning = await Warning.findOneAndDelete({
+      _id: warnId,
+      userId: targetUserId,
+      guildId: guild.id,
+    });
+
+    if (!warning) {
+      throw new Error("Warning not found or already removed.");
+    }
+
+    const targetUser = await client.users.fetch(targetUserId);
+    const moderator = await client.users.fetch(moderatorId);
+
+    await logAction(guild, "warnings", {
+      type: "unwarn",
+      user: targetUser,
+      moderator: moderator,
+      targetId: targetUserId,
+      warnId: warnId,
+    });
+
+    return {
+      success: true,
+      message: `Removed warning from ${targetUser.tag}`,
+      warning: warning,
+    };
+  } catch (error) {
+    throw new Error(`Failed to remove warning: ${error.message}`);
+  }
 }
 
 async function handlePurge(guild, client, moderator, reason, channelId, count) {
@@ -338,7 +375,7 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
     throw error;
   }
 
-  await logAction(guild, "purges", {
+  await logAction(guild, "purged", {
     type: "purge",
     moderator: moderator,
     reason: reason,
