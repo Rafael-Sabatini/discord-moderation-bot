@@ -15,11 +15,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("kick")
     .setDescription("Kick a user from the server")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers
-    )
     .addUserOption((option) =>
       option
         .setName("user")

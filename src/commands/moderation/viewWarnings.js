@@ -17,7 +17,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("warnings")
     .setDescription("View warnings for a user or all warnings in the server")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption((option) =>
       option
         .setName("user")

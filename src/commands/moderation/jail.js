@@ -16,7 +16,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("jail")
     .setDescription("Apply the JAILED role to a user.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addUserOption((option) =>
       option
         .setName("user")

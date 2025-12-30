@@ -21,12 +21,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("warningconfig")
     .setDescription("Configure warning thresholds for automated actions")
-    .setDefaultMemberPermissions(
-        PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers | 
-        PermissionFlagsBits.ManageRoles
-    )
     .addSubcommand((subcommand) =>
       subcommand
         .setName("mutethreshold")

@@ -45,6 +45,7 @@ for (const folder of commandFolders) {
 }
 
 const rest = new REST({ version: "10" }).setToken(token);
+const { Client, GatewayIntentBits } = require("discord.js");
 
 (async () => {
   try {
@@ -67,7 +68,61 @@ const rest = new REST({ version: "10" }).setToken(token);
     });
 
     console.log("Successfully reloaded global application (/) commands.");
+
+    // Setup guild-wide application command permissions to limit visibility to moderators
+    if (guildId) {
+      console.log(`Setting up command visibility for moderators only...`);
+      try {
+        const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+        await client.login(token);
+
+        const guild = await client.guilds.fetch(guildId);
+        if (guild) {
+          // Define moderator role IDs
+          const MODERATOR_ROLES = [
+            "1156184281471787068", // Owner
+            "1158116870600261712", // Admin
+            "1389665074444238960", // Head Moderator
+            "1156205959128031333", // Moderator
+            "1437842615528722535", // Added user
+          ];
+
+          // Get all commands for this guild
+          const guildCommands = await guild.commands.fetch();
+          
+          // Set permissions for each command to be visible only to moderators
+          for (const command of guildCommands.values()) {
+            try {
+              // Create permissions: allow moderator roles, deny @everyone
+              const permissions = [
+                {
+                  id: guild.roles.everyone.id,
+                  type: "role",
+                  permission: false, // Deny @everyone
+                },
+                ...MODERATOR_ROLES.map((roleId) => ({
+                  id: roleId,
+                  type: "role",
+                  permission: true, // Allow moderators
+                })),
+              ];
+
+              await command.permissions.set({ permissions });
+              console.log(`✅ ${command.name} - visible to moderators only`);
+            } catch (permError) {
+              console.log(`⚠️  Could not set permissions for ${command.name}: ${permError.message}`);
+            }
+          }
+
+          console.log(`✅ Command visibility configured.`);
+        }
+
+        await client.destroy();
+      } catch (setupError) {
+        console.warn(`⚠️  Could not setup command permissions: ${setupError.message}`);
+      }
+    }
   } catch (error) {
     console.error(error);
   }
-})();
+});

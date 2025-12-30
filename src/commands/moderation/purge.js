@@ -14,7 +14,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("purge")
     .setDescription("Delete messages from a channel or specific user")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
     .addIntegerOption((option) =>
       option
         .setName("range")

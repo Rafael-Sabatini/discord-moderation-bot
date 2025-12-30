@@ -16,11 +16,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("unwarn")
     .setDescription("Remove a warning from a user")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers
-    )
     .addUserOption((option) =>
       option
         .setName("user")

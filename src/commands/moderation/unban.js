@@ -15,11 +15,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("unban")
     .setDescription("Unban a user from the server")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers
-    )
     .addStringOption((option) =>
       option
         .setName("userid")

@@ -17,7 +17,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("servermute")
     .setDescription("Mute a user in voice channels only")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addUserOption((option) =>
       option
         .setName("user")

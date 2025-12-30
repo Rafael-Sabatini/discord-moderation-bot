@@ -14,11 +14,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("mute")
     .setDescription("Timeout (mute) a user")
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.BanMembers |
-        PermissionFlagsBits.KickMembers |
-        PermissionFlagsBits.ModerateMembers
-    )
     .addUserOption((option) =>
       option
         .setName("user")

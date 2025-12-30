@@ -17,7 +17,6 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("unjail")
     .setDescription("Remove the JAILED role from a user and restore their previous roles.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addUserOption((option) =>
       option
         .setName("user")
