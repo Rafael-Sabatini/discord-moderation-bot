@@ -126,9 +126,10 @@ async function logAction(guild, type, data) {
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
       case "messages":
+        const isSuspiciousLink = data.reason === "Blocked Discord CDN link";
         embed
           .setColor(data.action === "deleted" ? "#FF0000" : "#FFA500")
-          .setTitle(data.action === "deleted" ? "🗑️ Message Deleted" : "✏️ Message Updated")
+          .setTitle(data.action === "deleted" ? (isSuspiciousLink ? "🔗 Suspicious Link Deleted" : "🗑️ Message Deleted") : "✏️ Message Updated")
           .setDescription(`**Author:** ${data.author.tag}\n**Channel:** ${data.channel}`)
           .addFields({
             name: "Content",

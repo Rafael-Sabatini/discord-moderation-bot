@@ -7,6 +7,9 @@ const ALLOWED_ROLES = [
   "1156205959128031333", // Moderator
 ];
 
+// Regex to match Discord CDN attachment links with suspicious file names
+const DISCORD_CDN_LINK_REGEX = /https:\/\/cdn\.discordapp\.com\/attachments\/\d+\/\d+\/(?:\d+|IMG_\d+)\.(?:jpg|png|jpeg|gif)(?:\?|$)/i;
+
 module.exports = {
   name: "messageDelete",
   async execute(client, message) {
@@ -26,6 +29,9 @@ module.exports = {
 
     // Ignore bot messages and non-guild messages
     if (message.author?.bot || !message.guild) return;
+
+    // Skip logging if message contains suspicious Discord CDN link (already logged by messageCreate)
+    if (DISCORD_CDN_LINK_REGEX.test(message.content)) return;
 
     // If the message only contains a GIF embed (e.g., from Tenor/Giphy), skip logging
     if (
