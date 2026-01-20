@@ -23,6 +23,9 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -30,14 +33,11 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      await interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
-      return;
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
-    await interaction.deferReply();
     const user = interaction.options.getUser("user");
     if (!user) {
-      await interaction.editReply({ content: "You must specify a user to jail.", flags: 64 });
-      return;
+      return interaction.editReply({ content: "You must specify a user to jail." });
     }
     const JailedUser = require("../../database/models/jailedUser");
     try {
@@ -60,15 +60,17 @@ module.exports = {
         { userId: user.id, guildId: interaction.guild.id, jailedAt: new Date() },
         { upsert: true }
       );
-      // Log the jail action
-      await logAction(interaction.guild, "bans", {
+      // Send the response immediately
+      await interaction.editReply({ content: `JAILED role has been applied to ${user.tag}, and all other roles have been removed.` });
+      
+      // Log the jail action asynchronously
+      logAction(interaction.guild, "bans", {
         type: "jail",
         user: user,
         moderator: interaction.user,
         reason: "User jailed",
         targetId: user.id,
-      });
-      await interaction.editReply({ content: `JAILED role has been applied to ${user.tag}, and all other roles have been removed.` });
+      }).catch((err) => console.error("Failed to log jail action:", err));
     } catch (error) {
       console.error("Jail command error:", error);
       await interaction.editReply({ content: `There was an error jailing this user! (${error.message})` });

@@ -24,6 +24,9 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -31,14 +34,11 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      await interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
-      return;
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
-    await interaction.deferReply();
     const user = interaction.options.getUser("user");
     if (!user) {
-      await interaction.editReply({ content: "You must specify a user to unjail.", flags: 64 });
-      return;
+      return interaction.editReply({ content: "You must specify a user to unjail." });
     }
     try {
       const member = await interaction.guild.members.fetch(user.id);
@@ -50,17 +50,19 @@ module.exports = {
       await member.roles.remove(JAILED_ROLE_ID);
       // Remove from DB
       await JailedUser.deleteOne({ userId: user.id, guildId: interaction.guild.id });
-      // Log the unjail action
-      await logAction(interaction.guild, "bans", {
+      // Send the response immediately
+      // Restore previous roles if stored (not implemented yet)
+      // You can implement role backup/restore logic here
+      await interaction.editReply({ content: `JAILED role has been removed from ${user.tag}.` });
+      
+      // Log the unjail action asynchronously
+      logAction(interaction.guild, "bans", {
         type: "unjail",
         user: user,
         moderator: interaction.user,
         reason: "User unjailed",
         targetId: user.id,
-      });
-      // Restore previous roles if stored (not implemented yet)
-      // You can implement role backup/restore logic here
-      await interaction.editReply({ content: `JAILED role has been removed from ${user.tag}.` });
+      }).catch((err) => console.error("Failed to log unjail action:", err));
     } catch (error) {
       console.error("Unjail command error:", error);
       await interaction.editReply({ content: `There was an error unjailing this user! (${error.message})` });

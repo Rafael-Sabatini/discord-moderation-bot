@@ -28,6 +28,9 @@ module.exports = {
         .setRequired(false)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -35,14 +38,13 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
     const user = interaction.options.getUser("user");
     if (!user) {
-      return interaction.reply({ content: "You must specify a user to unmute.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a user to unmute." });
     }
     const reason = interaction.options.getString("reason") || "No reason provided";
-    await interaction.deferReply();
     try {
       const member = await interaction.guild.members.fetch(user.id);
       // Check if the user is currently timed out (muted)
@@ -51,22 +53,20 @@ module.exports = {
         return;
       }
       await member.timeout(null, reason);
-      // Log the timeout removal action to the timeouts channel
-      await logAction(interaction.guild, "timeouts", {
+      // Send the response immediately
+      await interaction.editReply({ content: `Successfully removed timeout (unmuted) for ${user.tag}. Reason: ${reason}` });
+      
+      // Log the timeout removal action asynchronously
+      logAction(interaction.guild, "timeouts", {
         type: "timeout removal",
         user: user,
         moderator: interaction.user,
         reason: reason,
         targetId: user.id,
-      });
-      await interaction.editReply({ content: `Successfully removed timeout (unmuted) for ${user.tag}. Reason: ${reason}` });
+      }).catch((err) => console.error("Failed to log unmute action:", err));
     } catch (error) {
       console.error("Unmute command error:", error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: "There was an error trying to unmute (remove timeout) for this user!" });
-      } else {
-        await interaction.reply({ content: "There was an error trying to unmute (remove timeout) for this user!", flags: 64 });
-      }
+      await interaction.editReply({ content: "There was an error trying to unmute (remove timeout) for this user!" });
     }
   },
 };

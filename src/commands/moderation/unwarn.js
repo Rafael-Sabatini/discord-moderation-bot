@@ -20,7 +20,7 @@ module.exports = {
       option
         .setName("user")
         .setDescription("The user to remove warning from")
-        .setRequired(true)
+        .setRequired(false)
     )
     .addStringOption((option) =>
       option
@@ -29,6 +29,9 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -36,17 +39,16 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
     const user = interaction.options.getUser("user");
     if (!user) {
-      return interaction.reply({ content: "You must specify a user to remove warning from.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a user to remove warning from." });
     }
     const warnId = interaction.options.getString("warnid");
     if (!warnId) {
-      return interaction.reply({ content: "You must specify a warning ID to remove.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a warning ID to remove." });
     }
-    await interaction.deferReply();
     try {
       const warning = await Warning.findOneAndDelete({
         _id: warnId,
@@ -57,22 +59,20 @@ module.exports = {
         await interaction.editReply({ content: "Warning not found or already removed." });
         return;
       }
-      // Log the unwarn action
-      await logAction(interaction.guild, "warnings", {
+      // Send the response immediately
+      await interaction.editReply({ content: `Successfully removed warning from ${user.tag}.` });
+      
+      // Log the unwarn action asynchronously
+      logAction(interaction.guild, "warnings", {
         type: "unwarn",
         user: user,
         moderator: interaction.user,
         targetId: user.id,
         warnId: warnId,
-      });
-      await interaction.editReply({ content: `Successfully removed warning from ${user.tag}.` });
+      }).catch((err) => console.error("Failed to log unwarn action:", err));
     } catch (error) {
       console.error("Unwarn command error:", error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: "Failed to remove the warning." });
-      } else {
-        await interaction.reply({ content: "Failed to remove the warning.", flags: 64 });
-      }
+      await interaction.editReply({ content: "Failed to remove the warning." });
     }
   },
 };

@@ -34,6 +34,9 @@ module.exports = {
         .setMaxValue(365)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -41,9 +44,8 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "You don't have permission to use this command!",
-        flags: 64,
       });
     }
 
@@ -52,12 +54,11 @@ module.exports = {
     const banDays = interaction.options.getInteger("days");
     
     if (!user) {
-      return interaction.reply({ content: "You must specify a user to ban.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a user to ban." });
     }
     if (!interaction.member.permissions.has("BanMembers")) {
-      return interaction.reply({ content: "You don't have permission to ban members!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to ban members!" });
     }
-    await interaction.deferReply();
     try {
       const isPermanent = !banDays;
       let expiryDate = null;
@@ -94,24 +95,21 @@ module.exports = {
       });
       await ban.save();
 
-      // Log the ban action immediately
-      await logAction(interaction.guild, "bans", {
+      // Send the response immediately
+      await interaction.editReply({ content: banMessage });
+      
+      // Log the ban action asynchronously
+      logAction(interaction.guild, "bans", {
         type: "ban",
         user: user,
         moderator: interaction.user,
         reason: reason,
         targetId: user.id,
         duration: isPermanent ? "Permanent" : `${banDays} days`,
-      });
-      
-      await interaction.editReply({ content: banMessage });
+      }).catch((err) => console.error("Failed to log ban action:", err));
     } catch (error) {
       console.error("Ban command error:", error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: `There was an error trying to ban this user! (${error.message})` });
-      } else {
-        await interaction.reply({ content: `There was an error trying to ban this user! (${error.message})`, flags: 64 });
-      }
+      await interaction.editReply({ content: `There was an error trying to ban this user! (${error.message})` });
     }
   },
 };

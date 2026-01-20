@@ -24,6 +24,9 @@ module.exports = {
         .setRequired(false)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const BOT_OWNER_ID = process.env.OWNER_ID || null;
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
@@ -32,10 +35,9 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
     const user = interaction.options.getUser("user");
-    await interaction.deferReply();
     try {
       let warnings;
       let title;
@@ -104,11 +106,9 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       console.error("ViewWarnings command error:", error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: "There was an error fetching the warnings!" });
-      } else {
-        await interaction.reply({ content: "There was an error fetching the warnings!", flags: 64 });
-      }
+      await interaction.editReply({ content: "There was an error fetching the warnings!" });
     }
+
+
   },
 };

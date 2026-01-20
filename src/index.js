@@ -163,51 +163,17 @@ client.on("interactionCreate", async (interaction) => {
     // ignore wrapper errors
   }
   try {
-    // ...existing code...
-      if (!interaction.guild || !interaction.member) {
-        return interaction.reply({
-          content: "This command can only be used in a server (guild).",
-          ephemeral: true,
-        });
-      }
+    // Get the command
+    const command = client.commands.get(interaction.commandName);
+    if (!command) {
+      return interaction.reply({
+        content: "Command not found!",
+        ephemeral: true,
+      });
+    }
 
-      // Allow only specific roles to use commands, or the bot owner (from env)
-      const ALLOWED_ROLES = [
-        "1156184281471787068", // Owner role
-        "1158116870600261712", // Admin
-        "1389665074444238960", // Head Moderator
-        "1156205959128031333", // Moderator
-      ];
-
-      const BOT_OWNER_ID = process.env.OWNER_ID || null;
-
-      // Safely read member roles (member.roles may be a Partial or missing cache)
-      const member = interaction.member;
-      const memberRoles = (member.roles && member.roles.cache)
-        ? Array.from(member.roles.cache.keys())
-        : [];
-
-      const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
-      const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
-
-      if (!hasRolePermission && !isBotOwner) {
-        // Attempt to log unauthorized attempts to a channel named 'unauthorized-attempts'
-        try {
-          const logChannel = interaction.guild.channels.cache.find((ch) => ch.name === 'unauthorized-attempts');
-          if (logChannel) {
-            logChannel.send(`${interaction.user.tag} (${interaction.user.id}) attempted to use /${interaction.commandName} without permission.`);
-          }
-        } catch (err) {
-          // ignore logging errors
-        }
-
-        return interaction.reply({
-          content: "You don't have permission to use this command!",
-          ephemeral: true,
-        });
-      }
-
-      await command.execute(interaction);
+    // Execute the command (which will handle deferReply and all responses)
+    await command.execute(interaction);
     } catch (error) {
       console.error(error);
       // Only try to reply if the interaction hasn't been replied to yet

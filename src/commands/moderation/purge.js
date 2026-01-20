@@ -36,6 +36,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner, guild owner, or users with role/ManageMessages permission
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -47,7 +50,7 @@ module.exports = {
     
     if (!hasRolePermission && !isBotOwner && !isGuildOwner && !hasPermission) {
       console.error(`[PURGE] Permission denied. User: ${interaction.user.id}, BOT_OWNER_ID: ${BOT_OWNER_ID}, hasRolePermission: ${hasRolePermission}, isBotOwner: ${isBotOwner}, isGuildOwner: ${isGuildOwner}, hasPermission: ${hasPermission}`);
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
 
     // Get options
@@ -57,7 +60,7 @@ module.exports = {
 
     // Validate channel is a text channel
     if (!targetChannel.isTextBased()) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "The specified channel is not a text channel!",
         flags: 64,
       });
@@ -65,13 +68,10 @@ module.exports = {
 
     // Validate range
     if (range < 1 || range > 100) {
-      return interaction.reply({
+      return interaction.editReply({
         content: "Range must be between 1 and 100 messages.",
-        flags: 64,
       });
     }
-
-    await interaction.deferReply();
 
     try {
       // Ensure bot has ManageMessages permission in the target channel
@@ -132,52 +132,28 @@ module.exports = {
         }
       }
 
-      // Log the purge action
-      try {
-        await logAction(interaction.guild, "messages", {
-          author: targetUser || { tag: "Multiple users" },
-          channel: targetChannel.name,
-          content: `Bulk deleted ${deletedCount} message(s)${targetUser ? ` from ${targetUser.tag}` : ""}`,
-          action: "purged",
-          moderator: interaction.user,
-          targetId: targetUser ? targetUser.id : targetChannel.id,
-        });
-      } catch (logError) {
-        console.error("[PURGE] Failed to log purge action:", logError);
-      }
-
-      // Reply with result using followUp (safer than editReply after long operation)
+      // Reply with result first
       const resultMessage =
         failedCount > 0
           ? `Successfully deleted ${deletedCount} message(s) in ${targetChannel.name}. Failed to delete ${failedCount} message(s).${targetUser ? ` (from ${targetUser.tag})` : ""}`
           : `Successfully deleted ${deletedCount} message(s) in ${targetChannel.name}${targetUser ? ` from ${targetUser.tag}` : ""}.`;
 
-      try {
-        await interaction.editReply({ content: resultMessage });
-      } catch (editError) {
-        // If editReply fails, try followUp instead
-        try {
-          await interaction.followUp({ content: resultMessage });
-        } catch (followUpError) {
-          console.error("[PURGE] Failed to send follow-up message:", followUpError);
-        }
-      }
+      await interaction.editReply({ content: resultMessage });
+      
+      // Log the purge action asynchronously (don't wait for it)
+      logAction(interaction.guild, "messages", {
+        author: targetUser || { tag: "Multiple users" },
+        channel: targetChannel.name,
+        content: `Bulk deleted ${deletedCount} message(s)${targetUser ? ` from ${targetUser.tag}` : ""}`,
+        action: "purged",
+        moderator: interaction.user,
+        targetId: targetUser ? targetUser.id : targetChannel.id,
+      }).catch((logError) => console.error("[PURGE] Failed to log purge action:", logError));
     } catch (error) {
       console.error("[PURGE] Error during purge command:", error);
-      try {
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply({
-            content: "There was an error trying to purge messages!",
-          });
-        } else {
-          await interaction.reply({
-            content: "There was an error trying to purge messages!",
-            flags: 64,
-          });
-        }
-      } catch (replyError) {
-        console.error("[PURGE] Failed to send error reply:", replyError);
-      }
+      await interaction.editReply({
+        content: "There was an error trying to purge messages!",
+      });
     }
   },
 };

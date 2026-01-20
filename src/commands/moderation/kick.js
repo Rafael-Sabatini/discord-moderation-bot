@@ -28,6 +28,9 @@ module.exports = {
         .setRequired(false)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -35,35 +38,32 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
     const user = interaction.options.getUser("user");
     const reason = interaction.options.getString("reason") || "No reason provided";
     if (!user) {
-      return interaction.reply({ content: "You must specify a user to kick.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a user to kick." });
     }
     if (!interaction.member.permissions.has("KickMembers")) {
-      return interaction.reply({ content: "You don't have permission to kick members!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to kick members!" });
     }
-    await interaction.deferReply();
     try {
       await interaction.guild.members.kick(user, reason);
-      // Log the kick action
-      await logAction(interaction.guild, "kicks", {
+      // Send the response immediately
+      await interaction.editReply({ content: `Successfully kicked ${user.tag} for reason: ${reason}` });
+      
+      // Log the kick action asynchronously
+      logAction(interaction.guild, "kicks", {
         type: "kick",
         user: user,
         moderator: interaction.user,
         reason: reason,
         targetId: user.id,
-      });
-      await interaction.editReply({ content: `Successfully kicked ${user.tag} for reason: ${reason}` });
+      }).catch((err) => console.error("Failed to log kick action:", err));
     } catch (error) {
       console.error("Kick command error:", error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: `There was an error trying to kick this user! (${error.message})` });
-      } else {
-        await interaction.reply({ content: `There was an error trying to kick this user! (${error.message})`, flags: 64 });
-      }
+      await interaction.editReply({ content: `There was an error trying to kick this user! (${error.message})` });
     }
   },
 };

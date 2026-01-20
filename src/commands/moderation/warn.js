@@ -31,6 +31,9 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction) {
+    // Defer reply immediately to prevent interaction timeout
+    await interaction.deferReply();
+    
     // Permission check: allow bot owner bypass
     const memberRoles = (interaction.member.roles && interaction.member.roles.cache)
       ? Array.from(interaction.member.roles.cache.keys())
@@ -38,17 +41,16 @@ module.exports = {
     const hasRolePermission = ALLOWED_ROLES.some((roleId) => memberRoles.includes(roleId));
     const isBotOwner = BOT_OWNER_ID && interaction.user && interaction.user.id === BOT_OWNER_ID;
     if (!hasRolePermission && !isBotOwner) {
-      return interaction.reply({ content: "You don't have permission to use this command!", flags: 64 });
+      return interaction.editReply({ content: "You don't have permission to use this command!" });
     }
     const user = interaction.options.getUser("user");
     if (!user) {
-      return interaction.reply({ content: "You must specify a user to warn.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a user to warn." });
     }
     const reason = interaction.options.getString("reason");
     if (!reason) {
-      return interaction.reply({ content: "You must specify a reason for the warning.", flags: 64 });
+      return interaction.editReply({ content: "You must specify a reason for the warning." });
     }
-    await interaction.deferReply();
     try {
       // DM the user about the warning
       try {
@@ -98,30 +100,25 @@ module.exports = {
           console.error("Failed to timeout user:", error);
         }
       }
-      // Log the warning action with warning ID
-      await logAction(interaction.guild, "warnings", {
+      // Send the response immediately
+      await interaction.editReply(
+        `Successfully warned ${user.tag} for reason: ${reason}\nThis user now has ${warningCount} warning(s).${additionalAction}`
+      );
+      
+      // Log the warning action asynchronously (don't wait for it)
+      logAction(interaction.guild, "warnings", {
         type: "warn",
         user: user,
         moderator: interaction.user,
         reason: reason,
         targetId: user.id,
         warnId: warning._id.toString(),
-      });
-      await interaction.editReply(
-        `Successfully warned ${user.tag} for reason: ${reason}\nThis user now has ${warningCount} warning(s).${additionalAction}`
-      );
+      }).catch((err) => console.error("Failed to log warning action:", err));
     } catch (error) {
       console.error(error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({
-          content: "There was an error trying to warn this user!",
-        });
-      } else {
-        await interaction.reply({
-          content: "There was an error trying to warn this user!",
-          ephemeral: true,
-        });
-      }
+      await interaction.editReply({
+        content: "There was an error trying to warn this user!",
+      });
     }
   },
 };
