@@ -73,8 +73,8 @@ module.exports = {
     }
 
     // Check if bot has permission to manage roles
-    if (!interaction.member.permissions.has("ManageRoles")) {
-      return interaction.editReply({ content: "You don't have permission to manage roles!" });
+    if (!interaction.guild.members.me.permissions.has("ManageRoles")) {
+      return interaction.editReply({ content: "I don't have permission to manage roles!" });
     }
 
     const results = {
@@ -110,19 +110,19 @@ module.exports = {
 
     if (results.failed.length > 0) {
       responseMessage += `❌ Failed to trust:\n`;
-      results.failed.forEach((item) => {
-        responseMessage += `  • ${item.user}: ${item.reason}\n`;
+      results.failed.forEach((fail) => {
+        responseMessage += `  - ${fail.user}: ${fail.reason}\n`;
       });
     }
 
-    await interaction.editReply({ content: responseMessage });
+    await interaction.editReply(responseMessage);
 
     // Log the trust action asynchronously
     logAction(interaction.guild, "trust", {
       type: "trust",
-      users: results.success,
       moderator: interaction.user,
-      targetIds: users.map((u) => u.id),
+      users: results.success,
+      failed: results.failed,
     }).catch((err) => console.error("Failed to log trust action:", err));
   },
 };

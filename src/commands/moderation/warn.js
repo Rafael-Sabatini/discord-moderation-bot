@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const Warning = require("../../database/models/warning");
 const { logAction } = require("../../utils/logging");
-const { thresholds } = require("../config/warningConfig");
+const { thresholds } = require("../../config/warningConfig");
 
 
 

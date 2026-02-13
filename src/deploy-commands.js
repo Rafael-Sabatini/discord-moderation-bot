@@ -53,21 +53,20 @@ const { Client, GatewayIntentBits } = require("discord.js");
       `Started refreshing ${commands.length} application (/) commands.`
     );
 
-    // If a guildId is set, clear that guild's commands first to avoid duplicate commands
+    // Deploy commands to guild for instant testing, or globally if no guild specified
     if (guildId) {
-      console.log(`Clearing commands for guild ${guildId} to avoid duplicates...`);
+      console.log(`Deploying commands to guild ${guildId} for instant availability...`);
       await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-        body: [],
+        body: commands,
       });
-      console.log(`Cleared guild (${guildId}) commands.`);
+      console.log(`✅ Successfully deployed ${commands.length} commands to guild!`);
+    } else {
+      // Deploy globally if no guild ID specified
+      await rest.put(Routes.applicationCommands(clientId), {
+        body: commands,
+      });
+      console.log("✅ Successfully deployed global commands (may take up to 1 hour to sync).");
     }
-
-    // Deploy commands globally
-    await rest.put(Routes.applicationCommands(clientId), {
-      body: commands,
-    });
-
-    console.log("Successfully reloaded global application (/) commands.");
 
     // Setup guild-wide application command permissions to limit visibility to moderators
     if (guildId) {
