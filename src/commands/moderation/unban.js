@@ -57,7 +57,7 @@ module.exports = {
       await interaction.editReply({ content: `Successfully unbanned ${bannedUser.tag}. Reason: ${reason}` });
       
       // Log the unban action asynchronously
-      logAction(interaction.guild, "bans", {
+      logAction(interaction.guild, "unbans", {
         type: "unban",
         user: bannedUser,
         moderator: interaction.user,

@@ -48,6 +48,21 @@ module.exports = {
       let shouldLog = true;
       // Try to fetch the audit log for message deletions
       if (message.guild && message.guild.members.me.permissions.has("ViewAuditLog")) {
+        // Check for bulk delete first
+        const bulkDeleteLogs = await message.guild.fetchAuditLogs({
+          limit: 5,
+          type: 73, // MESSAGE_BULK_DELETE
+        });
+        const recentBulkDelete = bulkDeleteLogs.entries.find(entry =>
+          entry.extra?.channel?.id === message.channel.id &&
+          Date.now() - entry.createdTimestamp < 5000
+        );
+        
+        // If this was part of a bulk delete, don't log it (it's already logged in purged channel)
+        if (recentBulkDelete) {
+          return;
+        }
+
         const fetchedLogs = await message.guild.fetchAuditLogs({
           limit: 10,
           type: 72, // MESSAGE_DELETE

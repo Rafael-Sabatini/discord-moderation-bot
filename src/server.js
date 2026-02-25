@@ -661,35 +661,6 @@ app.post("/api/moderation/purge", async (req, res) => {
   }
 });
 
-// Trust a user
-app.post("/api/moderation/trust", async (req, res) => {
-  try {
-    const { guildId, userId, moderatorId, reason } = req.body;
-
-    if (!guildId || !userId || !moderatorId) {
-      return res.status(400).json({
-        error: "Missing required fields: guildId, userId, moderatorId",
-      });
-    }
-
-    if (!client) {
-      return res.status(500).json({ error: "Discord client not initialized" });
-    }
-
-    const guild = await client.guilds.fetch(guildId);
-    const result = await executeModerationAction(guild, client, "trust", {
-      targetUserId: userId,
-      moderatorId: moderatorId,
-      reason: reason || "No reason provided",
-    });
-
-    res.status(201).json(result);
-  } catch (error) {
-    console.error("[API TRUST] Error:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: "Endpoint not found" });

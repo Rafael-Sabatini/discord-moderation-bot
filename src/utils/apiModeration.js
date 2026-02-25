@@ -36,8 +36,6 @@ async function executeModerationAction(guild, client, action, params) {
         return await handleUnwarn(guild, client, params);
       case "unban":
         return await handleUnban(guild, client, targetUserId, moderator, reason);
-      case "trust":
-        return await handleTrust(guild, client, member, targetUser, moderator, reason);
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -215,7 +213,7 @@ async function handleServerUnmute(guild, client, member, targetUser, moderator, 
     throw err;
   }
 
-  await logAction(guild, "vcMutes", {
+  await logAction(guild, "serverUnmute", {
     type: "server unmute",
     user: targetUser,
     moderator: moderator,
@@ -348,6 +346,14 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
     };
   }
 
+  // Capture message data for transcript before deletion
+  const messageTranscript = deletableMessages.map(msg => ({
+    author: msg.author?.tag || "Unknown user",
+    content: msg.content || "(no content)",
+    createdAt: msg.createdAt,
+    attachments: msg.attachments ? Array.from(msg.attachments.values()).map(att => att.url) : []
+  }));
+
   let deletedCount = 0;
   const batchSize = 100; // Discord max for bulk delete
 
@@ -383,6 +389,7 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
     reason: reason,
     channel: channel,
     deletedCount: deletedCount,
+    messages: messageTranscript,
   });
 
   return {
@@ -390,47 +397,6 @@ async function handlePurge(guild, client, moderator, reason, channelId, count) {
     message: `Purged ${deletedCount} messages from ${channel.name}`,
     deletedCount: deletedCount,
   };
-}
-
-async function handleTrust(guild, client, member, targetUser, moderator, reason) {
-  const TRUSTED_ROLE_ID = "1289792051172610049";
-
-  try {
-    const role = await guild.roles.fetch(TRUSTED_ROLE_ID);
-    
-    if (!role) {
-      throw new Error("Trusted role not found");
-    }
-
-    await member.roles.add(role);
-
-    // Send DM to user
-    try {
-      await targetUser.send(
-        `You have been granted trusted member status in **${guild.name}** by ${moderator.tag}.${reason ? ` Reason: ${reason}` : ""}`
-      );
-    } catch (dmError) {
-      console.warn("[TRUST] Could not send DM to user:", dmError.message);
-    }
-
-    // Log the action
-    await logAction(guild, "trust", {
-      type: "trust",
-      user: targetUser,
-      moderator: moderator,
-      reason: reason || "No reason provided",
-      targetId: targetUser.id,
-    });
-
-    return {
-      success: true,
-      message: `Successfully granted trusted status to ${targetUser.tag}`,
-      user: targetUser.tag,
-    };
-  } catch (error) {
-    console.error("[TRUST] Error:", error);
-    throw error;
-  }
 }
 
 function formatDuration(durationMs) {

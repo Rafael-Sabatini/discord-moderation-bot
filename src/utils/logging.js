@@ -2,20 +2,31 @@ const { EmbedBuilder } = require("discord.js");
 
 // Log channels configuration
 const LOG_CHANNEL_IDS = {
-  bans: "1403026353661546647",
-  kicks: "1403026353661546647",
-  timeouts: "1403026389552337040",
-  vcMutes: "1403026443612586062",
-  serverMutes: "1403026443612586062",
-  warnings: "1403026483974373498",
-  messages: "1403026519118581863", // Updated for deleted/edited messages
-  purged: "1451999307531157757", // Purged/bulk deleted messages
+  bans: "1403026353661546647",      // Bans and unbans
+  kicks: "1403026353661546647",     // Kicks (TODO: Update to separate channel ID)
+  mutes: "1403026389552337040",     // All mutes/unmutes (timeout, servermute, serverunmute)
+  warnings: "1403026483974373498",   // Warns and unwarns
+  messages: "1403026519118581863",   // Deleted and edited messages
+  purged: "1451999307531157757",     // Purged messages transcript
 };
 
 async function logAction(guild, type, data) {
   try {
+    // Map action types to log channels
+    let channelType = type;
+    
+    // Route mute-related actions to unified mutes channel
+    if (type === "timeouts" || type === "vcMutes" || type === "serverMutes" || type === "serverUnmute") {
+      channelType = "mutes";
+    }
+    
+    // Route unbans to bans channel
+    if (type === "unbans") {
+      channelType = "bans";
+    }
+
     // Get the appropriate log channel ID
-    let channelId = LOG_CHANNEL_IDS[type];
+    let channelId = LOG_CHANNEL_IDS[channelType];
     let logChannel;
 
     if (channelId) {
@@ -24,10 +35,9 @@ async function logAction(guild, type, data) {
 
     // Fallback: try to find a channel by conventional name when no ID configured or channel not found
     if (!logChannel) {
-      const fallbackName = type === "serverMutes" || type === "serverUnmute" ? "server-mutes" : type;
-      logChannel = guild.channels.cache.find((ch) => ch.name === fallbackName || ch.name === `${fallbackName}`);
+      logChannel = guild.channels.cache.find((ch) => ch.name === channelType || ch.name === `${channelType}`);
       if (!logChannel) {
-        console.error(`[LOGGING] Channel for type '${type}' not found (ID: ${channelId || 'none'}, name: '${fallbackName}')`);
+        console.error(`[LOGGING] Channel for type '${type}' (mapped to '${channelType}') not found (ID: ${channelId || 'none'})`);
         return;
       }
     }
@@ -52,6 +62,7 @@ async function logAction(guild, type, data) {
             .addFields({ name: "Moderator", value: data.moderator.tag });
         }
         break;
+        
       case "bans":
         embed
           .setColor("#FF0000")
@@ -62,6 +73,7 @@ async function logAction(guild, type, data) {
             { name: "Ban Type", value: data.duration || "Permanent" }
           );
         break;
+        
       case "unbans":
         embed
           .setColor("#00AA00")
@@ -69,20 +81,7 @@ async function logAction(guild, type, data) {
           .setDescription(`**Member:** ${data.user.tag}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
-      case "jail":
-        embed
-          .setColor("#8B4513")
-          .setTitle("🔒 Member Jailed")
-          .setDescription(`**Member:** ${data.user.tag}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
-        break;
-      case "unjail":
-        embed
-          .setColor("#90EE90")
-          .setTitle("🔓 Member Released from Jail")
-          .setDescription(`**Member:** ${data.user.tag}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
-        break;
+        
       case "kicks":
         embed
           .setColor("#FF8800")
@@ -90,20 +89,24 @@ async function logAction(guild, type, data) {
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
+        
+      // All mute types - different embeds based on data.type
       case "timeouts":
-        embed
-          .setColor("#FF6B6B")
-          .setTitle("⏳ Member Muted (Timed Out)")
-          .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Duration:** ${data.duration}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
+        if (data.type === "timeout removal") {
+          embed
+            .setColor("#6BFF6B")
+            .setTitle("🔊 Member Unmuted")
+            .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
+            .addFields({ name: "Moderator", value: data.moderator.tag });
+        } else {
+          embed
+            .setColor("#FF6B6B")
+            .setTitle("⏳ Member Muted")
+            .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}\n**Duration:** ${data.duration}`)
+            .addFields({ name: "Moderator", value: data.moderator.tag });
+        }
         break;
-      case "timeout removal":
-        embed
-          .setColor("#6BFF6B")
-          .setTitle("🔊 Member Unmuted (Timeout Removed)")
-          .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
-          .addFields({ name: "Moderator", value: data.moderator.tag });
-        break;
+        
       case "vcMutes":
         embed
           .setColor("#FF4444")
@@ -111,13 +114,15 @@ async function logAction(guild, type, data) {
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
+        
       case "serverMutes":
         embed
           .setColor("#FF4444")
-          .setTitle("🔇 Member Server Muted (Role)")
+          .setTitle("🔇 Member Server Muted")
           .setDescription(`**Member:** ${data.user.tag}\n**Reason:** ${data.reason}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
         break;
+        
       case "serverUnmute":
         embed
           .setColor("#6BFF6B")
@@ -177,12 +182,55 @@ async function logAction(guild, type, data) {
         }
         break;
       case "purged":
+        // Create main embed
         embed
           .setColor("#8B0000")
           .setTitle("🗑️ Messages Purged")
           .setDescription(`**Channel:** ${data.channel.name}\n**Messages Deleted:** ${data.deletedCount}\n**Reason:** ${data.reason || "No reason provided"}`)
           .addFields({ name: "Moderator", value: data.moderator.tag });
-        break;
+        
+        await logChannel.send({ embeds: [embed] });
+        
+        // Create transcript if messages were provided
+        if (data.messages && data.messages.length > 0) {
+          const transcript = data.messages.map((msg, index) => {
+            const timestamp = msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "Unknown time";
+            const author = msg.author || "Unknown user";
+            const content = msg.content || "(no content)";
+            const attachments = msg.attachments && msg.attachments.length > 0 
+              ? `\n📎 Attachments: ${msg.attachments.join(", ")}` 
+              : "";
+            return `[${timestamp}] ${author}: ${content}${attachments}`;
+          }).join("\n\n");
+          
+          // Split transcript into chunks if too long (Discord has 2000 char limit)
+          const maxLength = 1900;
+          if (transcript.length <= maxLength) {
+            await logChannel.send({ content: `**Transcript:**\n\`\`\`\n${transcript}\n\`\`\`` });
+          } else {
+            // Split into multiple messages
+            const chunks = [];
+            let currentChunk = "";
+            const lines = transcript.split("\n\n");
+            
+            for (const line of lines) {
+              if ((currentChunk + line).length > maxLength) {
+                if (currentChunk) chunks.push(currentChunk);
+                currentChunk = line;
+              } else {
+                currentChunk += (currentChunk ? "\n\n" : "") + line;
+              }
+            }
+            if (currentChunk) chunks.push(currentChunk);
+            
+            for (let i = 0; i < chunks.length; i++) {
+              await logChannel.send({ 
+                content: `**Transcript (${i + 1}/${chunks.length}):**\n\`\`\`\n${chunks[i]}\n\`\`\`` 
+              });
+            }
+          }
+        }
+        return; // Early return since we already sent the embed
     }
     await logChannel.send({ embeds: [embed] });
   } catch (error) {

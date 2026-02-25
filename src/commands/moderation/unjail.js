@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const JailedUser = require("../../database/models/jailedUser");
-const { logAction } = require("../../utils/logging");
 
 
 const JAILED_ROLE_ID = "1245518227648413798";
@@ -54,15 +53,6 @@ module.exports = {
       // Restore previous roles if stored (not implemented yet)
       // You can implement role backup/restore logic here
       await interaction.editReply({ content: `JAILED role has been removed from ${user.tag}.` });
-      
-      // Log the unjail action asynchronously
-      logAction(interaction.guild, "bans", {
-        type: "unjail",
-        user: user,
-        moderator: interaction.user,
-        reason: "User unjailed",
-        targetId: user.id,
-      }).catch((err) => console.error("Failed to log unjail action:", err));
     } catch (error) {
       console.error("Unjail command error:", error);
       await interaction.editReply({ content: `There was an error unjailing this user! (${error.message})` });
