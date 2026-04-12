@@ -1,7 +1,8 @@
 const { PermissionsBitField } = require("discord.js");
 const { logAction } = require("../utils/logging");
 
-const DISCORD_INVITE_REGEX = /(?:https?:\/\/)?(?:www\.)?discord\.gg\/[A-Za-z0-9-]+/i;
+const DISCORD_INVITE_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]+/i;
+const MARKDOWN_HEADER_REGEX = /^#{1,3}\s+/m;
 const INVITE_TIMEOUT_MS = 10 * 60 * 1000;
 
 module.exports = {
@@ -9,9 +10,13 @@ module.exports = {
   async execute(client, message) {
     if (message.author.bot || !message.guild) return;
 
-    if (!DISCORD_INVITE_REGEX.test(message.content || "")) return;
+    const hasInviteLink = DISCORD_INVITE_REGEX.test(message.content || "");
+    const hasMarkdownHeader = MARKDOWN_HEADER_REGEX.test(message.content || "");
 
-    const reason = "Posted a Discord invite link";
+    if (!hasInviteLink && !hasMarkdownHeader) return;
+
+    const violationType = hasInviteLink ? "Posted a Discord invite link" : "Posted a Discord markdown header";
+    const reason = violationType;
     const member = message.member || (await message.guild.members.fetch(message.author.id).catch(() => null));
     const botMember = message.guild.members.me;
 
@@ -34,7 +39,7 @@ module.exports = {
         embeds: message.embeds,
         action: "deleted",
         moderator: client.user,
-        reason: "Blocked Discord invite link",
+        reason: violationType,
         targetId: message.id,
       }).catch(() => null);
     }
