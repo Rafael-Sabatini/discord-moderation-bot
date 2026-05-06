@@ -25,7 +25,7 @@ module.exports = {
       option
         .setName("reason")
         .setDescription("Reason for the kick")
-        .setRequired(false)
+        .setRequired(true)
     ),
   async execute(interaction) {
     // Defer reply immediately to prevent interaction timeout

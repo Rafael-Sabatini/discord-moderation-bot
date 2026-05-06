@@ -29,6 +29,7 @@ function deployCommands() {
     const { spawn } = require("child_process");
     const deploy = spawn("node", [path.join(__dirname, "deploy-commands.js")], {
       stdio: "inherit",
+      cwd: __dirname, // Ensure correct working directory
     });
 
     deploy.on("close", (code) => {
@@ -60,27 +61,52 @@ const client = new Client({
 client.commands = new Collection();
 
 // Load commands
-const commandFolders = fs.readdirSync("./src/commands");
+const commandsPath = path.join(__dirname, "commands");
+let commandFolders = [];
 
 async function loadCommands() {
+  try {
+    commandFolders = fs.readdirSync(commandsPath);
+  } catch (error) {
+    console.error(`Error reading commands directory at ${commandsPath}:`, error);
+    return;
+  }
+
   for (const folder of commandFolders) {
+    const folderPath = path.join(commandsPath, folder);
+    
+    // Skip if not a directory
+    try {
+      if (!fs.statSync(folderPath).isDirectory()) continue;
+    } catch (error) {
+      continue;
+    }
+
     const commandFiles = fs
-      .readdirSync(`./src/commands/${folder}`)
+      .readdirSync(folderPath)
       .filter((file) => file.endsWith(".js"));
+    
+    console.log(`📂 Loading commands from ${folder}: found ${commandFiles.length} files`);
+
     for (const file of commandFiles) {
       try {
-        const command = require(`./commands/${folder}/${file}`);
+        const filePath = path.join(folderPath, file);
+        // Clear require cache to ensure fresh load
+        delete require.cache[require.resolve(filePath)];
+        const command = require(filePath);
+        
         if (!command.data || !command.data.name) {
           console.warn(`[WARNING] The command at ${folder}/${file} is missing required "data" property.`);
           continue;
         }
         client.commands.set(command.data.name, command);
-        console.log(`Loaded command: ${command.data.name}`);
+        console.log(`✅ Loaded command: ${command.data.name} from ${file}`);
       } catch (error) {
-        console.error(`Error loading command ${file}:`, error);
+        console.error(`❌ Error loading command ${file}:`, error.message);
       }
     }
   }
+  console.log(`📊 Total commands loaded: ${client.commands.size}`);
 }
 
 async function loadEvents() {
@@ -117,12 +143,15 @@ async function startBot() {
 }
 
 // Add ready event listener
-client.on("ready", () => {
+client.on("ready", async () => {
   console.log(`✅ ${client.user.tag} is online!`);
+  console.log(`📊 Commands loaded in client: ${client.commands.size}`);
+  
   // Pass the client to both the server and globals so it can use it for API operations
   setServerDiscordClient(client);
   setGlobalsDiscordClient(client);
   console.log("🚀 Express API server is ready to handle requests");
+  
   // Start the background ban expiry checker
   startBanExpiryCheck();
 });

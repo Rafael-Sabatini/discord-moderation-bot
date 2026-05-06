@@ -12,6 +12,10 @@ services:
         sync: false
       - key: TOKEN
         sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: GUILD_ID
+        sync: false
       - key: PORT
         value: 10000
       - key: OWNER_ID

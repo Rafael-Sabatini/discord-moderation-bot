@@ -9,16 +9,27 @@ const clientId = process.env.CLIENT_ID;
 const guildId = process.env.GUILD_ID;
 
 const commands = [];
-const commandFolders = fs.readdirSync("./src/commands");
+
+// Resolve correct path based on execution context
+const commandsDir = path.join(__dirname, "commands");
+if (!fs.existsSync(commandsDir)) {
+  console.error(`❌ Commands directory not found at: ${commandsDir}`);
+  process.exit(1);
+}
+
+const commandFolders = fs.readdirSync(commandsDir);
 
 for (const folder of commandFolders) {
+  const folderPath = path.join(commandsDir, folder);
+  if (!fs.statSync(folderPath).isDirectory()) continue;
+  
   const commandFiles = fs
-    .readdirSync(`./src/commands/${folder}`)
+    .readdirSync(folderPath)
     .filter((file) => file.endsWith(".js"));
 
   for (const file of commandFiles) {
     try {
-      const filePath = path.join(__dirname, "commands", folder, file);
+      const filePath = path.join(folderPath, file);
       const command = require(filePath);
 
       // Validate command structure
@@ -39,7 +50,7 @@ for (const folder of commandFolders) {
       commands.push(command.data.toJSON());
       console.log(`✅ Loaded command: ${file}`);
     } catch (error) {
-      console.log(`❌ Error loading command ${file}:`, error);
+      console.log(`❌ Error loading command ${file}:`, error.message);
     }
   }
 }
@@ -52,20 +63,38 @@ const { Client, GatewayIntentBits } = require("discord.js");
     console.log(
       `Started refreshing ${commands.length} application (/) commands.`
     );
+    
+    // Log all command names being deployed
+    console.log("Commands to deploy:");
+    commands.forEach((cmd, index) => {
+      console.log(`  ${index + 1}. ${cmd.name}`);
+    });
 
     // Deploy commands to guild for instant testing, or globally if no guild specified
     if (guildId) {
       console.log(`Deploying commands to guild ${guildId} for instant availability...`);
-      await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-        body: commands,
-      });
-      console.log(`✅ Successfully deployed ${commands.length} commands to guild!`);
+      try {
+        const result = await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+          body: commands,
+        });
+        console.log(`✅ Successfully deployed ${result.length} commands to guild!`);
+        console.log("Deployed commands:");
+        result.forEach((cmd, index) => {
+          console.log(`  ${index + 1}. ${cmd.name}`);
+        });
+      } catch (deployError) {
+        console.error("❌ Deployment error:", deployError.message);
+        if (deployError.rawError?.errors) {
+          console.error("Discord validation errors:", JSON.stringify(deployError.rawError.errors, null, 2));
+        }
+        throw deployError;
+      }
     } else {
       // Deploy globally if no guild ID specified
-      await rest.put(Routes.applicationCommands(clientId), {
+      const result = await rest.put(Routes.applicationCommands(clientId), {
         body: commands,
       });
-      console.log("✅ Successfully deployed global commands (may take up to 1 hour to sync).");
+      console.log(`✅ Successfully deployed ${result.length} global commands (may take up to 1 hour to sync).`);
     }
 
     // Setup guild-wide application command permissions to limit visibility to moderators
